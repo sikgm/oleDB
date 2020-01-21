@@ -12,9 +12,9 @@ namespace sales_management_system
 {
     public class DBcomponent
     {
-        public static readonly string DBConnectionString = "hogehoge";
+        public static readonly string DBConnectionString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=|DataDirectory|/システム開発演習_KT-22.accdb;Persist Security Info=True;Jet OLEDB:Database Password=admin";
 
-        // SELECT ���ׂĂ̍s�ǂݎ��
+        // SELECT すべての行読み取り
         public List<Dictionary<string, string>> ExecSelectQuery(string sql, Dictionary<string,string> parameter)
         {
             OleDbConnection oleConnection = new OleDbConnection(DBConnectionString);
@@ -37,10 +37,14 @@ namespace sales_management_system
                     result.Add(new Dictionary<string, string>());
                     for (int k = 0; k < dataReader.FieldCount; k++)
                     {
-                        result[i].Add(dataReader.GetName(k), (string)dataReader.GetValue(k));
+                        var item = dataReader.GetValue(k);
+                        if(!(item is string))
+                        {
+                            item = item.ToString();
+                        }
+                        result[i].Add(dataReader.GetName(k), (string)item);
                     }
                 }
-
             }
             catch (Exception exception)
             {
@@ -55,7 +59,7 @@ namespace sales_management_system
 
         }
 
-        // dataGridView�̃f�[�^�擾
+        // dataGridViewのデータ取得
         public DataTable FetcDGVData(string sql, Dictionary<string, string> parameter)
         {
             OleDbConnection oleConnection = new OleDbConnection(DBConnectionString);
@@ -88,7 +92,7 @@ namespace sales_management_system
             return dataTable;
         }
 
-        // INSERT UPDATE DELETE �p
+        // INSERT UPDATE DELETE 用
         public int ExecQueryForChangeTable(string sql, Dictionary<string, string> parameter)
         {
             OleDbConnection oleConnection = new OleDbConnection(DBConnectionString);
@@ -117,6 +121,59 @@ namespace sales_management_system
                 oleConnection.Close();
             }
             return rows;
+        }
+
+
+        // トランザクション用
+        public bool ExecQueryForTransaction(List<string> sqls, List<Dictionary<string, string>> parameters)
+        {
+            OleDbConnection oleConnection = new OleDbConnection(DBConnectionString);
+
+            try
+            {
+                oleConnection.Open();
+
+                OleDbTransaction transaction = oleConnection.BeginTransaction(IsolationLevel.ReadCommitted);
+                OleDbCommand oleCommand = new OleDbCommand()
+                {
+                    Connection  = oleConnection,
+                    Transaction = transaction
+                };
+
+                try
+                {
+                    for(int i = 0;i < sqls.Count; i++)
+                    {
+                        string sql = sqls[i];
+                        Dictionary<string, string> parameter = parameters[i];
+
+                        oleCommand.CommandText = sql;
+                        foreach (KeyValuePair<string, string> param in parameter)
+                        {
+                            oleCommand.Parameters.AddWithValue(param.Key, param.Value);
+                        }
+                        oleCommand.ExecuteNonQuery();
+                        oleCommand.Parameters.Clear();
+                    }
+                    transaction.Commit();
+                }
+                catch(Exception exception)
+                {
+                    transaction.Rollback();
+                    throw;
+                }
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show(exception.ToString());
+                return false;
+            }
+            finally
+            {
+                oleConnection.Close();
+            }
+
+            return true;
         }
     }
 }
